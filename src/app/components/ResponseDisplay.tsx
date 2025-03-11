@@ -5,9 +5,10 @@ import { useEffect, useRef } from 'react';
 interface ResponseDisplayProps {
   response: string | null;
   isLoading?: boolean;
+  error?: string | null;
 }
 
-export default function ResponseDisplay({ response, isLoading = false }: ResponseDisplayProps) {
+export default function ResponseDisplay({ response, isLoading = false, error = null }: ResponseDisplayProps) {
   const responseRef = useRef<HTMLDivElement>(null);
   
   // Auto-scroll to bottom when new response comes in
@@ -34,6 +35,18 @@ export default function ResponseDisplay({ response, isLoading = false }: Respons
           <div className="text-center">
             <p className="text-lg font-medium text-gray-700 dark:text-gray-300">Processing your request...</p>
             <p className="text-sm text-gray-500 dark:text-gray-400">This may take a moment depending on the complexity of your query.</p>
+          </div>
+        </div>
+      ) : error ? (
+        <div className="flex flex-col items-center justify-center h-60 space-y-4">
+          <div className="flex items-center justify-center w-16 h-16 rounded-full bg-red-50 dark:bg-red-900/20">
+            <svg className="h-8 w-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div className="text-center">
+            <p className="text-lg font-medium text-red-600 dark:text-red-400">Error</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">{error}</p>
           </div>
         </div>
       ) : response ? (

@@ -4,6 +4,7 @@ interface ModelSelectorProps {
   selectedModel: string;
   onSelect: (model: string) => void;
   disabled?: boolean;
+  availableModels?: string[];
 }
 
 const models = [
@@ -17,7 +18,7 @@ const models = [
   { id: 'mistral-medium-latest', name: 'Mistral Medium', provider: 'Mistral AI', tier: 'standard' }
 ];
 
-export default function ModelSelector({ selectedModel, onSelect, disabled = false }: ModelSelectorProps) {
+export default function ModelSelector({ selectedModel, onSelect, disabled = false, availableModels = [] }: ModelSelectorProps) {
   return (
     <div className="w-full space-y-2">
       <div className="relative">
@@ -31,34 +32,11 @@ export default function ModelSelector({ selectedModel, onSelect, disabled = fals
                    disabled:opacity-50 appearance-none transition-colors duration-200"
           aria-label="Select AI model"
         >
-          <optgroup label="OpenAI">
-            {models.filter(model => model.provider === 'OpenAI').map((model) => (
-              <option key={model.id} value={model.id}>
-                {model.name} {model.tier === 'premium' && '★'}
-              </option>
-            ))}
-          </optgroup>
-          <optgroup label="Anthropic">
-            {models.filter(model => model.provider === 'Anthropic').map((model) => (
-              <option key={model.id} value={model.id}>
-                {model.name} {model.tier === 'premium' && '★'}
-              </option>
-            ))}
-          </optgroup>
-          <optgroup label="Google">
-            {models.filter(model => model.provider === 'Google').map((model) => (
-              <option key={model.id} value={model.id}>
-                {model.name} {model.tier === 'premium' && '★'}
-              </option>
-            ))}
-          </optgroup>
-          <optgroup label="Mistral AI">
-            {models.filter(model => model.provider === 'Mistral AI').map((model) => (
-              <option key={model.id} value={model.id}>
-                {model.name} {model.tier === 'premium' && '★'}
-              </option>
-            ))}
-          </optgroup>
+          {availableModels.map((model) => (
+            <option key={model} value={model}>
+              {model}
+            </option>
+          ))}
         </select>
         <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
           <svg className="w-5 h-5 text-gray-500 dark:text-gray-400" viewBox="0 0 20 20" fill="currentColor">

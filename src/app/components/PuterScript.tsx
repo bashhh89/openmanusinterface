@@ -6,7 +6,10 @@ export default function PuterScript() {
   return (
     <Script
       src="https://js.puter.com/v2/"
-      strategy="beforeInteractive"
+      strategy="afterInteractive"
+      onLoad={() => {
+        console.log('Puter.js loaded successfully');
+      }}
       onError={(e) => {
         console.error('Error loading Puter.js:', e);
       }}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import ChatInput from './components/ChatInput';
 import ResponseDisplay from './components/ResponseDisplay';
 import ModelSelector from './components/ModelSelector';
@@ -13,33 +13,22 @@ declare global {
       ai: {
         chat: (prompt: string, options: { 
           model: string;
-          functions?: Array<{
-            name: string;
-            description: string;
-            parameters: {
-              type: string;
-              properties: {
-                [key: string]: {
-                  type: string;
-                  description: string;
-                }
-              };
-              required: string[];
-            };
-          }>;
           tools?: Array<{
-            name: string;
-            description: string;
-            parameters: {
-              type: string;
-              properties: {
-                [key: string]: {
-                  type: string;
-                  description: string;
-                }
+            type: string;
+            function: {
+              name: string;
+              description: string;
+              parameters: {
+                type: string;
+                properties: {
+                  [key: string]: {
+                    type: string;
+                    description: string;
+                  }
+                };
+                required: string[];
               };
-              required: string[];
-            };
+            }
           }>;
           messages?: Array<{
             role: string;
@@ -87,6 +76,17 @@ async function browse_website(url: string): Promise<string> {
   return `Mock webpage content for ${url}. In a real implementation, this would fetch and parse the actual webpage content.`;
 }
 
+interface HistoryEntry {
+  content: string;
+  timestamp: number;
+}
+
+interface Version {
+  content: string;
+  description: string;
+  timestamp: number;
+}
+
 export default function Home() {
   const [selectedModel, setSelectedModel] = useState('gpt-4o-mini');
   const [response, setResponse] = useState<string | null>(null);
@@ -94,9 +94,52 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [debugInfo, setDebugInfo] = useState<string | null>(null);
-  const [previewURL, setPreviewURL] = useState<string | undefined>(undefined);
-  const [previewContent, setPreviewContent] = useState<string | undefined>(undefined);
+  const [websitePreviewUrl, setWebsitePreviewUrl] = useState<string | undefined>(undefined);
+  const [isPreviewVisible, setIsPreviewVisible] = useState(false);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [shareLink, setShareLink] = useState<string | null>(null);
+  const previewPanelRef = useRef<HTMLDivElement>(null);
+  const [previewWidth, setPreviewWidth] = useState<number>(40);
+  const isDragging = useRef(false);
+  const startX = useRef(0);
+  const startWidth = useRef(0);
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const startTimeRef = useRef<number | null>(null);
+  const [estimatedTime, setEstimatedTime] = useState<number>(0);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [currentHistoryIndex, setCurrentHistoryIndex] = useState(-1);
+  const [versions, setVersions] = useState<Version[]>([]);
+  const [currentVersion, setCurrentVersion] = useState(1);
+
+  // Initialize previewWidth from localStorage on client-side only
+  useEffect(() => {
+    const saved = localStorage.getItem('previewWidth');
+    if (saved) {
+      setPreviewWidth(parseFloat(saved));
+    }
+  }, []);
+
+  // Available models from Puter.js documentation
+  const availableModels = [
+    'gpt-4o-mini',
+    'gpt-4o',
+    'o3-mini',
+    'o1-mini',
+    'claude-3-5-sonnet',
+    'deepseek-chat',
+    'deepseek-reasoner',
+    'gemini-2.0-flash',
+    'gemini-1.5-flash',
+    'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo',
+    'meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo',
+    'meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo',
+    'mistral-large-latest',
+    'pixtral-large-latest',
+    'codestral-latest',
+    'google/gemma-2-27b-it',
+    'grok-beta'
+  ];
 
   useEffect(() => {
     const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
@@ -106,12 +149,92 @@ export default function Home() {
     return () => darkModeQuery.removeEventListener('change', handler);
   }, []);
 
+  // Effect to handle preview panel animation
+  useEffect(() => {
+    if (websitePreviewUrl && previewPanelRef.current) {
+      setIsPreviewVisible(true);
+    } else if (!websitePreviewUrl && previewPanelRef.current) {
+      setIsPreviewVisible(false);
+    }
+  }, [websitePreviewUrl]);
+
+  // Add timer cleanup
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, []);
+
+  // Function to get estimated time based on model
+  const getEstimatedTime = (model: string): number => {
+    switch (model) {
+      case 'o1-mini':
+        return 15; // 15 seconds
+      case 'gpt-4o':
+        return 20; // 20 seconds
+      case 'claude-3-5-sonnet':
+        return 25; // 25 seconds
+      default:
+        return 30; // default 30 seconds
+    }
+  };
+
+  // Update startTimer to include estimated time
+  const startTimer = () => {
+    startTimeRef.current = Date.now();
+    setEstimatedTime(getEstimatedTime(selectedModel));
+    timerRef.current = setInterval(() => {
+      if (startTimeRef.current) {
+        const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
+        setElapsedTime(elapsed);
+      }
+    }, 1000);
+  };
+
+  // Function to stop the timer
+  const stopTimer = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    startTimeRef.current = null;
+    setElapsedTime(0);
+  };
+
   const extractTextContent = async (result: any): Promise<string> => {
+    // Log the raw response for debugging
+    console.log('Raw AI response:', result);
+
+    // Handle string responses directly
     if (typeof result === 'string') {
       return result;
     }
 
     if (result && typeof result === 'object') {
+      // Handle o1-mini and similar models that might return different formats
+      if (result.content) {
+        return result.content;
+      }
+      
+      if (result.choices?.[0]?.message?.content) {
+        return result.choices[0].message.content;
+      }
+
+      if (result.completion) {
+        return result.completion;
+      }
+
+      // Handle Claude's response format
+      if (result.message?.content && Array.isArray(result.message.content)) {
+        return result.message.content
+          .filter((item: any) => item.type === 'text')
+          .map((item: any) => item.text)
+          .join('\n');
+      }
+
+      // Handle function/tool calls
       if (result.function_call || result.tool_calls || result.message?.tool_calls || result.message?.function_call) {
         const functionCall = result.function_call || 
                            result.tool_calls?.[0] ||
@@ -142,280 +265,749 @@ export default function Home() {
         }
       }
 
-      const text = result.text || result.content || result.completion || 
-                   result.message?.content || 
-                   (Array.isArray(result.message?.content) 
-                     ? result.message.content.map((item: any) => item.text).join('\n') 
-                     : null);
+      // Handle various response formats
+      const text = result.text || 
+                  result.content || 
+                  result.completion || 
+                  result.message?.content ||
+                  (Array.isArray(result.message?.content) 
+                    ? result.message.content.map((item: any) => item.text).join('\n') 
+                    : null);
 
-      if (typeof text === 'string') {
-        const lowerText = text.toLowerCase();
-
-        if (lowerText.includes('weather') || lowerText.includes('temperature')) {
-          const cities = ['Paris', 'London', 'New York', 'Tokyo'];
-          const mentionedCity = cities.find(city => lowerText.includes(city.toLowerCase()));
-          if (mentionedCity) {
-            return await getWeather(mentionedCity);
-          }
-
-          const cityMatch = text.match(/(?:in|at|for)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/);
-          if (cityMatch && cityMatch[1]) {
-            return await getWeather(cityMatch[1]);
-          }
-
-          return "I can only provide weather information for Paris, London, New York, and Tokyo.";
-        }
-
-        if (lowerText.includes('date') || lowerText.includes('today') || lowerText.includes('current day')) {
-          return getCurrentDate();
-        }
-
+      if (text) {
         return text;
       }
     }
 
+    // If we can't extract text in any other way, try to stringify the result
     try {
-      return JSON.stringify(result, null, 2);
+      const stringified = JSON.stringify(result, null, 2);
+      console.error('Unable to parse response normally, stringified result:', stringified);
+      return stringified;
     } catch (e) {
+      console.error('Error stringifying result:', e);
       return `Unable to parse response: ${e instanceof Error ? e.message : 'Unknown error'}`;
     }
   };
 
+  const extractWebsiteUrl = (prompt: string): string | null => {
+    // Simple extraction: if prompt starts with "Browse" or "browse", extract the URL
+    const browseRegex = /^browse\s+(.+)$/i;
+    const match = prompt.match(browseRegex);
+    
+    if (match && match[1]) {
+      // Very basic URL validation/formatting
+      let url = match[1].trim();
+      
+      // If URL doesn't start with http:// or https://, add https://
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+      }
+      
+      return url;
+    }
+    
+    return null;
+  };
+
+  const extractHtmlFromResponse = (response: string): string | null => {
+    // First try to find a complete HTML document
+    const fullHtmlMatch = response.match(/<!DOCTYPE html>[\s\S]*?<\/html>/i);
+    if (fullHtmlMatch) {
+      return fullHtmlMatch[0].trim();
+    }
+
+    // Then try to find HTML content between ```html and ``` tags
+    const htmlMatch = response.match(/```(?:html)?\n([\s\S]*?)```/);
+    if (htmlMatch) {
+      const extractedHtml = htmlMatch[1].trim();
+      // If the extracted content is a complete HTML document, return it
+      if (extractedHtml.toLowerCase().includes('<!doctype html>')) {
+        return extractedHtml;
+      }
+      // Otherwise, wrap it in a basic HTML structure
+      return `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title>Generated Page</title>
+          </head>
+          <body>
+            ${extractedHtml}
+          </body>
+        </html>
+      `;
+    }
+
+    // If the response itself looks like HTML content but isn't wrapped
+    if (response.includes('<html>') || response.includes('<body>')) {
+      // Check if it's a complete document
+      if (response.toLowerCase().includes('<!doctype html>')) {
+        return response.trim();
+      }
+      // Wrap it in a basic HTML structure
+      return `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title>Generated Page</title>
+          </head>
+          <body>
+            ${response}
+          </body>
+        </html>
+      `;
+    }
+
+    return null;
+  };
+
+  // Add to history
+  const addToHistory = (content: string) => {
+    const newHistory = history.slice(0, currentHistoryIndex + 1);
+    newHistory.push({ content, timestamp: Date.now() });
+    setHistory(newHistory);
+    setCurrentHistoryIndex(newHistory.length - 1);
+  };
+
+  // Undo/Redo functions
+  const handleUndo = () => {
+    if (currentHistoryIndex > 0) {
+      setCurrentHistoryIndex(currentHistoryIndex - 1);
+      const previousContent = history[currentHistoryIndex - 1].content;
+      setResponse(previousContent);
+      updatePreview(previousContent);
+    }
+  };
+
+  const handleRedo = () => {
+    if (currentHistoryIndex < history.length - 1) {
+      setCurrentHistoryIndex(currentHistoryIndex + 1);
+      const nextContent = history[currentHistoryIndex + 1].content;
+      setResponse(nextContent);
+      updatePreview(nextContent);
+    }
+  };
+
+  // Version management
+  const handleVersionChange = (version: number) => {
+    setCurrentVersion(version);
+    if (versions[version - 1]) {
+      const versionContent = versions[version - 1].content;
+      setResponse(versionContent);
+      updatePreview(versionContent);
+    }
+  };
+
+  // Save current state as a new version
+  const saveVersion = (description: string) => {
+    if (response) {
+      const newVersion: Version = {
+        content: response,
+        description,
+        timestamp: Date.now()
+      };
+      setVersions([...versions, newVersion]);
+    }
+  };
+
+  // Download functionality
+  const handleDownload = () => {
+    if (response) {
+      const htmlContent = extractHtmlFromResponse(response);
+      if (htmlContent) {
+        const blob = new Blob([htmlContent], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `webpage_v${currentVersion}.html`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    }
+  };
+
+  // Update preview helper
+  const updatePreview = (content: string) => {
+    const htmlContent = extractHtmlFromResponse(content);
+    if (htmlContent) {
+      if (websitePreviewUrl) {
+        URL.revokeObjectURL(websitePreviewUrl);
+      }
+      const blob = new Blob([htmlContent], { type: 'text/html' });
+      const previewUrl = URL.createObjectURL(blob);
+      setWebsitePreviewUrl(previewUrl);
+    }
+  };
+
+  // Enhance handleSubmit to support versioning
   const handleSubmit = async (prompt: string) => {
     setError(null);
     setDebugInfo(null);
     setIsLoading(true);
-    setPreviewContent(undefined);
-
+    setShareLink(null);
+    startTimer(); // Start the timer when generation begins
+    
     try {
-      if (!window.puter?.ai?.chat) {
+      // Make sure Puter.js is loaded
+      if (typeof window === 'undefined' || !window.puter?.ai?.chat) {
         throw new Error('Puter.js is not loaded properly. Please refresh the page.');
       }
 
-      console.log(`Sending request to model: ${selectedModel}`);
+      // Check if this is a browse request
+      const websiteUrl = extractWebsiteUrl(prompt);
       
-      // First chat call that might trigger a tool call
-      const completion = await window.puter.ai.chat(prompt, {
-        model: selectedModel,
-        tools: [{
-          name: 'get_weather',
-          description: 'Get current weather for a given location',
-          parameters: {
-            type: 'object',
-            properties: {
-              location: {
-                type: 'string',
-                description: 'City name e.g. Paris, London'
-              }
-            },
-            required: ['location']
-          }
-        }, {
-          name: 'browse_website',
-          description: 'Browse a website and get its content',
-          parameters: {
-            type: 'object',
-            properties: {
-              url: {
-                type: 'string',
-                description: 'The URL of the website to browse'
-              }
-            },
-            required: ['url']
-          }
-        }]
-      });
-
-      console.log('Response structure:', completion);
-      setDebugInfo(`Model: ${selectedModel}, Response type: ${typeof completion}`);
-
-      if (!completion) {
-        setError(`Empty response from model: ${selectedModel}`);
-        return;
-      }
-
-      // Check for refusals
-      if (completion.refusal || completion.message?.refusal) {
-        const refusalMessage = typeof completion.refusal === 'string' 
-          ? completion.refusal 
-          : (typeof completion.message?.refusal === 'string' 
-              ? completion.message.refusal 
-              : 'Request was refused by the AI model.');
-        setError(refusalMessage);
-        setResponse(null);
-        return;
-      }
-
-      // Check if there's a tool call in the response
-      if (completion.message?.tool_calls && completion.message.tool_calls.length > 0) {
-        const toolCall = completion.message.tool_calls[0];
+      if (websiteUrl) {
+        // This is a browse request
+        setIsPreviewLoading(true);
+        setWebsitePreviewUrl(websiteUrl);
         
-        if (toolCall.function.name === 'get_weather') {
-          try {
-            // Extract location from tool call arguments
-            const args = JSON.parse(toolCall.function.arguments);
-            const weatherData = await getWeather(args.location);
+        try {
+          // Get website content
+          const websiteContent = await browse_website(websiteUrl);
+          
+          // Generate a response about the browsed website
+          const result = await window.puter.ai.chat(
+            `Analyze this website content from ${websiteUrl}:\n\n${websiteContent}`,
+            { model: selectedModel }
+          );
 
-            // Make second chat call with the tool response
-            const finalResponse = await window.puter.ai.chat(prompt, {
-              model: selectedModel,
-              messages: [
-                { role: "user", content: prompt },
-                completion.message,
-                { 
-                  role: "tool",
-                  tool_call_id: toolCall.id,
-                  content: weatherData
-                }
-              ]
-            });
-
-            // Process and set the final response
-            const processedResponse = await extractTextContent(finalResponse);
-            setResponse(processedResponse);
-          } catch (error) {
-            console.error('Error processing tool call:', error);
-            setError('Error processing weather request');
-            setResponse(null);
+          if (!result) {
+            throw new Error('No response received from AI model');
           }
-        } else if (toolCall.function.name === 'browse_website') {
-          try {
-            // Extract URL from tool call arguments
-            const args = JSON.parse(toolCall.function.arguments);
-            setPreviewURL(args.url);
-            setIsPreviewLoading(true);
-            
-            // Fetch website content
-            const websiteContent = await browse_website(args.url);
-            setPreviewContent(websiteContent);
-            setIsPreviewLoading(false);
 
-            // Make second chat call with the tool response
-            const finalResponse = await window.puter.ai.chat(prompt, {
-              model: selectedModel,
-              messages: [
-                { role: "user", content: prompt },
-                completion.message,
-                { 
-                  role: "tool",
-                  tool_call_id: toolCall.id,
-                  content: websiteContent
-                }
-              ]
-            });
-
-            const processedResponse = await extractTextContent(finalResponse);
-            setResponse(processedResponse);
-          } catch (error) {
-            setIsPreviewLoading(false);
-            console.error('Error processing tool call:', error);
-            setError('Error processing website browsing request');
-            setResponse(null);
+          // Extract response content
+          const responseContent = await extractTextContent(result);
+          if (!responseContent) {
+            throw new Error('No content in response');
           }
+
+          setResponse(responseContent);
+          setIsPreviewLoading(false);
+          
+          // After successful generation, add to history and potentially create new version
+          addToHistory(responseContent);
+          
+          // If this is a new prompt (not an edit), create a new version
+          if (!prompt.startsWith('edit:')) {
+            const versionNumber = versions.length + 1;
+            saveVersion(`Version ${versionNumber} - ${prompt.slice(0, 50)}...`);
+          }
+        } catch (browseError) {
+          console.error('Browse request error:', browseError);
+          throw new Error(`Failed to browse website: ${browseError instanceof Error ? browseError.message : 'Unknown error'}`);
         }
       } else {
-        // Handle regular text response (no tool calls)
-        const processedResponse = await extractTextContent(completion);
-        setResponse(processedResponse);
+        // Regular chat request
+        const result = await window.puter.ai.chat(
+          `Create a webpage based on this request: ${prompt}. Return only the complete HTML document with embedded CSS and JavaScript. Do not include any explanations or markdown formatting.`,
+          { model: selectedModel }
+        );
+
+        if (!result) {
+          throw new Error('No response received from AI model');
+        }
+
+        // Extract response content
+        const responseContent = await extractTextContent(result);
+        if (!responseContent) {
+          throw new Error('No content in response');
+        }
+
+        // Try to extract just the HTML code
+        const htmlContent = extractHtmlFromResponse(responseContent);
+        if (!htmlContent) {
+          console.error('Could not extract HTML from response:', responseContent);
+          setResponse(responseContent);
+          return;
+        }
+
+        setResponse(responseContent);
+
+        // Create a blob URL for the preview
+        const blob = new Blob([htmlContent], { type: 'text/html' });
+        const previewUrl = URL.createObjectURL(blob);
+        
+        // Show the preview
+        setWebsitePreviewUrl(previewUrl);
+        setIsPreviewVisible(true);
+        
+        // After successful generation, add to history and potentially create new version
+        addToHistory(responseContent);
+        
+        // If this is a new prompt (not an edit), create a new version
+        if (!prompt.startsWith('edit:')) {
+          const versionNumber = versions.length + 1;
+          saveVersion(`Version ${versionNumber} - ${prompt.slice(0, 50)}...`);
+        }
       }
     } catch (error) {
-      console.error('Error:', error);
-      setError(error instanceof Error ? error.message : 'An unknown error occurred');
+      console.error('Error details:', {
+        error,
+        type: error?.constructor?.name,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : 'No stack trace'
+      });
+      
+      let errorMessage = 'An unknown error occurred';
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      } else if (error && typeof error === 'object' && Object.keys(error).length === 0) {
+        errorMessage = 'The AI model returned an empty response. Please try again or select a different model.';
+      }
+      
+      setError(`Error: ${errorMessage}`);
       setResponse(null);
+    } finally {
+      setIsLoading(false);
+      stopTimer(); // Stop the timer when generation ends
+    }
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    isDragging.current = true;
+    startX.current = e.clientX;
+    startWidth.current = previewWidth;
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!isDragging.current) return;
+    
+    const containerWidth = window.innerWidth;
+    const dx = e.clientX - startX.current;
+    const newWidth = Math.min(Math.max(20, startWidth.current - (dx / containerWidth * 100)), 80);
+    setPreviewWidth(newWidth);
+    localStorage.setItem('previewWidth', newWidth.toString());
+  };
+
+  const handleMouseUp = () => {
+    isDragging.current = false;
+    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mouseup', handleMouseUp);
+  };
+
+  // Clean up event listeners
+  useEffect(() => {
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
+
+  // Add effect to handle shared content on load
+  useEffect(() => {
+    const handleSharedContent = () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const encodedContent = urlParams.get('content');
+      
+      if (encodedContent) {
+        try {
+          const decodedContent = decodeURIComponent(encodedContent);
+          setResponse(decodedContent);
+          setWebsitePreviewUrl(URL.createObjectURL(new Blob([decodedContent], { type: 'text/html' })));
+          setIsPreviewVisible(true);
+        } catch (error) {
+          console.error('Error loading shared content:', error);
+          setError('Failed to load shared content');
+        }
+      }
+    };
+
+    handleSharedContent();
+  }, []);
+
+  // Add function to generate share link with standalone page
+  const generateShareLink = async () => {
+    if (!response) return;
+    
+    try {
+      // Extract HTML content from the response
+      const htmlContent = extractHtmlFromResponse(response);
+      if (!htmlContent) {
+        throw new Error('Could not extract HTML content from response');
+      }
+
+      // Create a minimal standalone HTML page
+      const minimalHtml = htmlContent.trim();
+      
+      // Create the share URL
+      const shareUrl = `${window.location.origin}/shared?content=${encodeURIComponent(minimalHtml)}`;
+      
+      // Validate the URL length (browsers typically have a limit around 2000 characters)
+      if (shareUrl.length > 2000) {
+        throw new Error('Generated content is too large to share via URL. Please try generating a simpler page.');
+      }
+      
+      setShareLink(shareUrl);
+      
+      // Copy to clipboard
+      await navigator.clipboard.writeText(shareUrl);
+      alert('Share link copied to clipboard!');
+    } catch (error) {
+      console.error('Error generating share link:', error);
+      setError(error instanceof Error ? error.message : 'Failed to generate share link');
+    }
+  };
+
+  // Enhance edit handlers to support history
+  const handleDirectEdit = (selection: string, replacement: string) => {
+    if (!response) return;
+    
+    try {
+      // Get the current HTML content
+      const htmlContent = extractHtmlFromResponse(response);
+      if (!htmlContent) {
+        throw new Error('Could not extract HTML content');
+      }
+
+      // Create new content with the replacement
+      const newContent = htmlContent.replace(selection, replacement);
+      
+      // Update the response state with the new content
+      setResponse(newContent);
+
+      // Revoke old URL to prevent memory leaks
+      if (websitePreviewUrl) {
+        URL.revokeObjectURL(websitePreviewUrl);
+      }
+
+      // Create and set new preview URL
+      const blob = new Blob([newContent], { type: 'text/html' });
+      const newPreviewUrl = URL.createObjectURL(blob);
+      setWebsitePreviewUrl(newPreviewUrl);
+      
+      // Add to history after successful edit
+      addToHistory(newContent);
+    } catch (error) {
+      console.error('Direct edit error:', error);
+      setError(`Error applying edit: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  const handleAiEdit = async (selection: string, prompt: string) => {
+    if (!response) return;
+    
+    try {
+      setIsLoading(true);
+      
+      // Get AI suggestion for the edit
+      const result = await window.puter.ai.chat(
+        `I have this HTML content where I want to modify this specific part: "${selection}". 
+         The requested change is: "${prompt}".
+         Return ONLY the new content that should replace the selected text. Do not include any explanations or markdown formatting.`,
+        { model: selectedModel }
+      );
+
+      const replacement = await extractTextContent(result);
+      if (!replacement) {
+        throw new Error('AI did not provide a valid replacement');
+      }
+
+      // Get the current HTML content
+      const htmlContent = extractHtmlFromResponse(response);
+      if (!htmlContent) {
+        throw new Error('Could not extract HTML content');
+      }
+
+      // Create new content with the replacement
+      const newContent = htmlContent.replace(selection, replacement);
+      
+      // Update the response state with the new content
+      setResponse(newContent);
+
+      // Revoke old URL to prevent memory leaks
+      if (websitePreviewUrl) {
+        URL.revokeObjectURL(websitePreviewUrl);
+      }
+
+      // Create and set new preview URL
+      const blob = new Blob([newContent], { type: 'text/html' });
+      const newPreviewUrl = URL.createObjectURL(blob);
+      setWebsitePreviewUrl(newPreviewUrl);
+      
+      // Add to history after successful edit
+      addToHistory(newContent);
+    } catch (error) {
+      console.error('AI edit error:', error);
+      setError(`Error applying AI edit: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Smooth scroll to chat interface
-  const scrollToChat = (e: React.MouseEvent) => {
-    e.preventDefault();
-    const chatElement = document.getElementById('chat-interface');
-    if (chatElement) {
-      chatElement.scrollIntoView({ behavior: 'smooth' });
-    }
-  };
-
   return (
-    <div className={`min-h-screen ${isDarkMode ? 'dark' : ''}`}>
+    <main className={`min-h-screen ${isDarkMode ? 'dark' : ''}`}>
       <div className="dark:bg-gray-900 min-h-screen">
-        {/* Landing Page Section */}
+        {/* Hero Section */}
         <section className="relative overflow-hidden bg-gradient-to-b from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 py-20 sm:py-32">
+          <div className="absolute inset-0 overflow-hidden">
+            <div className="absolute inset-0 bg-[linear-gradient(to_right,#4f46e5,#06b6d4)] opacity-10 dark:opacity-20"></div>
+            <div className="absolute inset-y-0 right-1/2 w-[200%] origin-bottom-right rounded-full bg-white dark:bg-gray-900 md:right-0 md:w-[100%] md:origin-center lg:right-1/3"></div>
+          </div>
           <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center space-y-8">
-              <h1 className="text-5xl md:text-6xl font-extrabold text-gray-900 dark:text-white tracking-tight">
-                Welcome to AI Chat Interface
+              <h1 className="text-5xl md:text-6xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-cyan-500 dark:from-indigo-400 dark:to-cyan-300 tracking-tight">
+                AI Web Explorer
               </h1>
               <p className="max-w-3xl mx-auto text-xl text-gray-600 dark:text-gray-300">
-                Your Gateway to Powerful AI Models - Simple, Fast, and No API Keys Required!
+                Experience the future of web browsing with AI-powered exploration and analysis
               </p>
               <div className="max-w-xl mx-auto">
                 <p className="text-lg text-gray-500 dark:text-gray-400">
-                  Get started by scrolling down to explore our powerful AI chat interface. Ask questions, browse websites, and interact with multiple AI models seamlessly.
+                  Ask questions, browse websites, and get instant AI analysis - all in one seamless interface.
                 </p>
               </div>
               <div className="mt-10">
-                <a href="#chat-interface" className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 transition-colors duration-200">
+                <a 
+                  href="#chat-interface" 
+                  className="inline-flex items-center px-6 py-3 rounded-full text-white bg-gradient-to-r from-indigo-600 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
+                >
                   Get Started
-                  <svg className="ml-2 -mr-1 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="ml-2 -mr-1 w-5 h-5 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
                   </svg>
                 </a>
               </div>
             </div>
           </div>
-        </section>
-
-        {/* Chat Interface Section */}
-        <section id="chat-interface" className="py-12 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-4xl mx-auto space-y-8">
-            <header className="text-center space-y-4">
-              <h2 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">
-                AI Chat Interface
-              </h2>
-              <p className="text-lg text-gray-600 dark:text-gray-400">
-                Interact with various AI models using Puter.js
-              </p>
-            </header>
-            
-            <div className="space-y-6 bg-white dark:bg-gray-800 shadow-lg rounded-xl p-6">
-              <div className="space-y-2">
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-                  Select AI Model
-                </h3>
-                <ModelSelector
-                  selectedModel={selectedModel}
-                  onSelect={setSelectedModel}
-                  disabled={isLoading}
-                />
+          
+          {/* Feature highlights */}
+          <div className="relative mt-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg transform hover:-translate-y-1 transition-all duration-200">
+                <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center mb-4">
+                  <svg className="w-6 h-6 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Real-time Browsing</h3>
+                <p className="text-gray-600 dark:text-gray-400">Watch as AI explores websites in real-time with our interactive preview panel.</p>
               </div>
-
-              <div className="space-y-4">
-                <ChatInput onSubmit={handleSubmit} isLoading={isLoading} />
-                
-                {error && (
-                  <div className="p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400">
-                    <p className="flex items-center">
-                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      {error}
-                    </p>
-                  </div>
-                )}
-                
-                {debugInfo && (
-                  <div className="p-3 bg-gray-50 dark:bg-gray-700/30 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-500 dark:text-gray-400 text-xs">
-                    <p><code>{debugInfo}</code></p>
-                  </div>
-                )}
-                
-                <ResponseDisplay response={response} isLoading={isLoading} />
+              
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg transform hover:-translate-y-1 transition-all duration-200">
+                <div className="w-10 h-10 rounded-full bg-cyan-100 dark:bg-cyan-900/30 flex items-center justify-center mb-4">
+                  <svg className="w-6 h-6 text-cyan-600 dark:text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Smart Analysis</h3>
+                <p className="text-gray-600 dark:text-gray-400">Get instant AI-powered insights and summaries from any webpage.</p>
+              </div>
+              
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg transform hover:-translate-y-1 transition-all duration-200">
+                <div className="w-10 h-10 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center mb-4">
+                  <svg className="w-6 h-6 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Multiple AI Models</h3>
+                <p className="text-gray-600 dark:text-gray-400">Choose from various AI models to get the best results for your needs.</p>
               </div>
             </div>
           </div>
         </section>
+
+        {/* Chat Interface Section */}
+        <section id="chat-interface" className="py-12 px-4 sm:px-6 lg:px-8 scroll-mt-8">
+          <div className="max-w-7xl mx-auto">
+            {/* Add Share Button */}
+            <div className="mb-4 flex justify-end">
+              {response && (
+                <button
+                  onClick={generateShareLink}
+                  className="inline-flex items-center px-4 py-2 rounded-md text-white bg-indigo-600 hover:bg-indigo-500 transition-colors"
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                  </svg>
+                  Share
+                </button>
+              )}
+            </div>
+            
+            {/* Share Link Display */}
+            {shareLink && (
+              <div className="mb-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-md">
+                <p className="text-sm text-gray-600 dark:text-gray-400">Share Link:</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <input
+                    type="text"
+                    value={shareLink}
+                    readOnly
+                    className="flex-1 p-2 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded"
+                  />
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(shareLink);
+                      alert('Link copied!');
+                    }}
+                    className="px-3 py-2 text-sm text-white bg-indigo-600 hover:bg-indigo-500 rounded"
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Add Progress Indicator */}
+            {isLoading && (
+              <div className="mb-4 p-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
+                <div className="space-y-4">
+                  {/* Title and Timer */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <svg className="animate-spin h-5 w-5 text-indigo-600 dark:text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                        Generating Content
+                      </h3>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-lg font-mono text-indigo-600 dark:text-indigo-400">
+                        {Math.max(0, estimatedTime - elapsedTime)}s
+                      </span>
+                      <span className="text-sm text-gray-500 dark:text-gray-400"> remaining</span>
+                    </div>
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div className="relative pt-1">
+                    <div className="flex mb-2 items-center justify-between">
+                      <div>
+                        <span className="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-indigo-600 bg-indigo-200 dark:text-indigo-300 dark:bg-indigo-900/30">
+                          Progress
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-xs font-semibold inline-block text-indigo-600 dark:text-indigo-400">
+                          {Math.min(100, Math.round((elapsedTime / estimatedTime) * 100))}%
+                        </span>
+                      </div>
+                    </div>
+                    <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-indigo-200 dark:bg-indigo-900/30">
+                      <div 
+                        style={{ 
+                          width: `${Math.min(100, (elapsedTime / estimatedTime) * 100)}%`,
+                          transition: 'width 0.5s ease-in-out'
+                        }} 
+                        className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-indigo-500 dark:bg-indigo-400"
+                      ></div>
+                    </div>
+                  </div>
+
+                  {/* Status Message */}
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-gray-600 dark:text-gray-300">
+                      {elapsedTime < 5 ? 'Initializing...' :
+                       elapsedTime < estimatedTime * 0.3 ? 'Processing your request...' :
+                       elapsedTime < estimatedTime * 0.6 ? 'Generating content...' :
+                       elapsedTime < estimatedTime * 0.9 ? 'Finalizing...' :
+                       'Almost done...'}
+                    </span>
+                    <span className="text-gray-500 dark:text-gray-400">
+                      Model: {selectedModel}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Main content area with split screen layout */}
+            <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-200px)]">
+              {/* Left column: AI Chat Interface */}
+              <div 
+                className={`flex-1 flex flex-col space-y-6 transition-all duration-300 ease-in-out`}
+                style={{ width: isPreviewVisible ? `${100 - previewWidth}%` : '100%' }}
+              >
+                {/* Model selector */}
+                <div className="w-full">
+                  <ModelSelector 
+                    selectedModel={selectedModel} 
+                    onSelect={setSelectedModel} 
+                    disabled={isLoading}
+                    availableModels={availableModels}
+                  />
+                </div>
+                
+                {/* Response display */}
+                <div className="flex-1 overflow-hidden">
+                  <ResponseDisplay 
+                    response={response} 
+                    isLoading={isLoading}
+                    error={error}
+                  />
+                </div>
+                
+                {/* Chat input */}
+                <div className="w-full">
+                  <ChatInput 
+                    onSubmit={handleSubmit} 
+                    isLoading={isLoading}
+                  />
+                </div>
+              </div>
+              
+              {/* Resizer handle */}
+              {isPreviewVisible && (
+                <div
+                  className="hidden lg:block w-1 bg-gray-200 dark:bg-gray-700 hover:bg-blue-500 dark:hover:bg-blue-600 cursor-col-resize transition-colors"
+                  onMouseDown={handleMouseDown}
+                />
+              )}
+              
+              {/* Right column: Browser Preview */}
+              <div 
+                ref={previewPanelRef}
+                className={`transition-all duration-500 ease-in-out ${
+                  isPreviewVisible 
+                    ? 'opacity-100' 
+                    : 'lg:max-w-0 lg:opacity-0 lg:overflow-hidden'
+                }`}
+                style={{ width: isPreviewVisible ? `${previewWidth}%` : '0%' }}
+              >
+                <BrowserPreview 
+                  url={websitePreviewUrl} 
+                  isLoading={isPreviewLoading}
+                  onEdit={handleDirectEdit}
+                  onAiEdit={handleAiEdit}
+                  version={currentVersion}
+                  onVersionChange={handleVersionChange}
+                  onDownload={handleDownload}
+                  onUndo={handleUndo}
+                  onRedo={handleRedo}
+                  canUndo={currentHistoryIndex > 0}
+                  canRedo={currentHistoryIndex < history.length - 1}
+                />
+              </div>
+            </div>
+          </div>
+        </section>
+        
+        {/* Footer */}
+        <footer className="bg-gray-50 dark:bg-gray-800/50 py-12 mt-12">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <p className="text-gray-600 dark:text-gray-400">
+              Try asking: "Browse example.com" or ask any question to the AI
+            </p>
+            <p className="mt-4 text-sm text-gray-500 dark:text-gray-500">
+              © 2024 AI Web Explorer • Powered by Puter.js
+            </p>
+          </div>
+        </footer>
       </div>
-    </div>
+    </main>
   );
 }
