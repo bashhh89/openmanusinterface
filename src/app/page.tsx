@@ -749,77 +749,8 @@ export default function Home() {
   return (
     <main className={`min-h-screen ${isDarkMode ? 'dark' : ''}`}>
       <div className="dark:bg-gray-900 min-h-screen">
-        {/* Hero Section */}
-        <section className="relative overflow-hidden bg-gradient-to-b from-white to-gray-50 dark:from-gray-900 dark:to-gray-800 py-20 sm:py-32">
-          <div className="absolute inset-0 overflow-hidden">
-            <div className="absolute inset-0 bg-[linear-gradient(to_right,#4f46e5,#06b6d4)] opacity-10 dark:opacity-20"></div>
-            <div className="absolute inset-y-0 right-1/2 w-[200%] origin-bottom-right rounded-full bg-white dark:bg-gray-900 md:right-0 md:w-[100%] md:origin-center lg:right-1/3"></div>
-          </div>
-          <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center space-y-8">
-              <h1 className="text-5xl md:text-6xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-cyan-500 dark:from-indigo-400 dark:to-cyan-300 tracking-tight">
-                AI Web Explorer
-              </h1>
-              <p className="max-w-3xl mx-auto text-xl text-gray-600 dark:text-gray-300">
-                Experience the future of web browsing with AI-powered exploration and analysis
-              </p>
-              <div className="max-w-xl mx-auto">
-                <p className="text-lg text-gray-500 dark:text-gray-400">
-                  Ask questions, browse websites, and get instant AI analysis - all in one seamless interface.
-                </p>
-              </div>
-              <div className="mt-10">
-                <a 
-                  href="#chat-interface" 
-                  className="inline-flex items-center px-6 py-3 rounded-full text-white bg-gradient-to-r from-indigo-600 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
-                >
-                  Get Started
-                  <svg className="ml-2 -mr-1 w-5 h-5 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </a>
-              </div>
-            </div>
-          </div>
-          
-          {/* Feature highlights */}
-          <div className="relative mt-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg transform hover:-translate-y-1 transition-all duration-200">
-                <div className="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center mb-4">
-                  <svg className="w-6 h-6 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-                  </svg>
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Real-time Browsing</h3>
-                <p className="text-gray-600 dark:text-gray-400">Watch as AI explores websites in real-time with our interactive preview panel.</p>
-              </div>
-              
-              <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg transform hover:-translate-y-1 transition-all duration-200">
-                <div className="w-10 h-10 rounded-full bg-cyan-100 dark:bg-cyan-900/30 flex items-center justify-center mb-4">
-                  <svg className="w-6 h-6 text-cyan-600 dark:text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                  </svg>
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Smart Analysis</h3>
-                <p className="text-gray-600 dark:text-gray-400">Get instant AI-powered insights and summaries from any webpage.</p>
-              </div>
-              
-              <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg transform hover:-translate-y-1 transition-all duration-200">
-                <div className="w-10 h-10 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center mb-4">
-                  <svg className="w-6 h-6 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Multiple AI Models</h3>
-                <p className="text-gray-600 dark:text-gray-400">Choose from various AI models to get the best results for your needs.</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
         {/* Chat Interface Section */}
-        <section id="chat-interface" className="py-12 px-4 sm:px-6 lg:px-8 scroll-mt-8">
+        <section id="chat-interface" className="py-12 px-4 sm:px-6 lg:px-8">
           <div className="max-w-7xl mx-auto">
             {/* Add Share Button */}
             <div className="mb-4 flex justify-end">
