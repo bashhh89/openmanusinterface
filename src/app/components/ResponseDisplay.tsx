@@ -33,23 +33,25 @@ export default function ResponseDisplay({ response, isLoading = false }: Respons
   }
 
   // Check if the response is a JSON string by accident and format it
-  let formattedResponse = response;
-  if (response.startsWith('{') && response.endsWith('}')) {
+  let formattedResponse = String(response);
+  if (formattedResponse.startsWith('{') && formattedResponse.endsWith('}')) {
     try {
       // Try to parse and re-format JSON for readability
-      const parsedJson = JSON.parse(response);
+      const parsedJson = JSON.parse(formattedResponse);
       formattedResponse = JSON.stringify(parsedJson, null, 2);
     } catch (e) {
       // If parsing fails, keep the original response
-      formattedResponse = response;
+      // formattedResponse is already set
     }
   }
+
+  const lines = formattedResponse.split('\n');
 
   return (
     <div className="w-full p-6 border rounded-lg bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-sm">
       <div className="prose dark:prose-invert max-w-none">
         <div className="whitespace-pre-wrap font-sans text-gray-900 dark:text-gray-100 leading-relaxed">
-          {formattedResponse.split('\n').map((line, idx) => (
+          {lines.map((line, idx) => (
             <p key={idx} className={line.trim() === "" ? "h-4" : "mb-4"}>
               {line}
             </p>

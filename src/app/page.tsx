@@ -4,15 +4,61 @@ import { useState, useEffect } from 'react';
 import ChatInput from './components/ChatInput';
 import ResponseDisplay from './components/ResponseDisplay';
 import ModelSelector from './components/ModelSelector';
+import axios from 'axios';
 
 declare global {
   interface Window {
     puter: {
       ai: {
-        chat: (prompt: string, options: { model: string }) => Promise<any>;
+        chat: (prompt: string, options: { 
+          model: string,
+          functions?: Array<{
+            name: string;
+            description: string;
+            parameters: {
+              type: string;
+              properties: {
+                [key: string]: {
+                  type: string;
+                  description: string;
+                }
+              };
+              required: string[];
+            };
+          }>;
+        }) => Promise<any>;
       };
     };
   }
+}
+
+// Real weather data function
+async function getWeather(location: string) {
+  try {
+    const apiKey = process.env.OPENWEATHER_API_KEY;
+    const response = await axios.get(
+      `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(location)}&appid=${apiKey}&units=metric`
+    );
+    
+    const { main, weather } = response.data;
+    return `${Math.round(main.temp)}°C, ${weather[0].description}`;
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.status === 404) {
+      return `Could not find weather data for ${location}. Please check the city name and try again.`;
+    }
+    return `Error fetching weather data for ${location}. Please try again later.`;
+  }
+}
+
+// Current date function
+function getCurrentDate() {
+  const now = new Date();
+  return now.toLocaleDateString('en-US', { 
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
 }
 
 export default function Home() {
@@ -24,74 +70,79 @@ export default function Home() {
   const [debugInfo, setDebugInfo] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check system dark mode preference
     const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)');
     setIsDarkMode(darkModeQuery.matches);
-
-    // Listen for system dark mode changes
     const handler = (e: MediaQueryListEvent) => setIsDarkMode(e.matches);
     darkModeQuery.addEventListener('change', handler);
-
     return () => darkModeQuery.removeEventListener('change', handler);
   }, []);
 
-  // Helper function to safely extract text content from various response formats
-  const extractTextContent = (result: any): string => {
-    // Check for direct string
+  const extractTextContent = async (result: any): Promise<string> => {
     if (typeof result === 'string') {
       return result;
     }
-    
-    // Handle Claude's nested structure pattern
-    if (result && typeof result === 'object') {
-      // Claude 3.5 specific format with message -> content -> text
-      if (result.message?.content && Array.isArray(result.message.content)) {
-        const textParts = result.message.content
-          .filter((item: any) => item.type === 'text' && typeof item.text === 'string')
-          .map((item: any) => item.text);
-          
-        if (textParts.length > 0) {
-          return textParts.join('\n\n');
-        }
-      }
-      
-      // Direct text property
-      if (typeof result.text === 'string') {
-        return result.text;
-      }
-      
-      // Claude completion property
-      if (typeof result.completion === 'string') {
-        return result.completion;
-      }
 
-      // OpenAI content property
-      if (typeof result.content === 'string') {
-        return result.content;
-      }
-      
-      // Handle message.content format (string)
-      if (result.message && typeof result.message.content === 'string') {
-        return result.message.content;
-      }
-      
-      // Handle array of objects with text properties
-      if (Array.isArray(result)) {
-        // Try to extract text from the first item if it's an object with text
-        if (result.length > 0 && typeof result[0] === 'object' && result[0] !== null) {
-          if (typeof result[0].text === 'string') {
-            return result[0].text;
+    if (result && typeof result === 'object') {
+      if (result.function_call || result.tool_calls || result.message?.tool_calls || result.message?.function_call) {
+        const functionCall = result.function_call || 
+                           result.tool_calls?.[0] ||
+                           result.message?.tool_calls?.[0] ||
+                           result.message?.function_call;
+
+        if (functionCall) {
+          try {
+            const name = functionCall.name || functionCall.function?.name;
+            const args = JSON.parse(typeof functionCall.arguments === 'string' 
+              ? functionCall.arguments 
+              : JSON.stringify(functionCall.arguments));
+
+            switch (name) {
+              case 'getWeather':
+                return await getWeather(args.location);
+              case 'getCurrentDate':
+                return getCurrentDate();
+              default:
+                return 'Unknown function call';
+            }
+          } catch (e) {
+            console.error('Error processing function call:', e);
+            return 'Error: Unable to process function call';
           }
         }
-        
-        // If it's an array of strings, join them
-        if (result.every((item: any) => typeof item === 'string')) {
-          return result.join('');
+      }
+
+      const text = result.text || result.content || result.completion || 
+                   result.message?.content || 
+                   (Array.isArray(result.message?.content) 
+                     ? result.message.content.map((item: any) => item.text).join('\n') 
+                     : null);
+
+      if (typeof text === 'string') {
+        const lowerText = text.toLowerCase();
+
+        if (lowerText.includes('weather') || lowerText.includes('temperature')) {
+          const cities = ['Paris', 'London', 'New York', 'Tokyo'];
+          const mentionedCity = cities.find(city => lowerText.includes(city.toLowerCase()));
+          if (mentionedCity) {
+            return await getWeather(mentionedCity);
+          }
+
+          const cityMatch = text.match(/(?:in|at|for)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/);
+          if (cityMatch && cityMatch[1]) {
+            return await getWeather(cityMatch[1]);
+          }
+
+          return "I can only provide weather information for Paris, London, New York, and Tokyo.";
         }
+
+        if (lowerText.includes('date') || lowerText.includes('today') || lowerText.includes('current day')) {
+          return getCurrentDate();
+        }
+
+        return text;
       }
     }
-    
-    // Last resort: stringify the object
+
     try {
       return JSON.stringify(result, null, 2);
     } catch (e) {
@@ -103,66 +154,68 @@ export default function Home() {
     setError(null);
     setDebugInfo(null);
     setIsLoading(true);
-    
+
     try {
       if (!window.puter?.ai?.chat) {
         throw new Error('Puter.js is not loaded properly. Please refresh the page.');
       }
 
       console.log(`Sending request to model: ${selectedModel}`);
-      
       const result = await window.puter.ai.chat(prompt, {
-        model: selectedModel
+        model: selectedModel,
+        functions: [
+          {
+            name: 'getWeather',
+            description: 'Get the current weather for a specific location. Use this function whenever users ask about weather in any city.',
+            parameters: {
+              type: 'object',
+              properties: {
+                location: {
+                  type: 'string',
+                  description: 'The city name to get weather for. Available cities: Paris, London, New York, Tokyo'
+                }
+              },
+              required: ['location']
+            }
+          },
+          {
+            name: 'getCurrentDate',
+            description: 'Get the current date. Use this function whenever users ask about the current date, today\'s date, or what day it is.',
+            parameters: {
+              type: 'object',
+              properties: {},
+              required: []
+            }
+          }
+        ]
       });
-      
-      // Log the structure for debugging
+
       console.log('Response structure:', result);
-      
-      // Store debug info
       setDebugInfo(`Model: ${selectedModel}, Response type: ${typeof result}`);
-      
-      // Check for empty response
+
       if (!result) {
         setError(`Empty response from model: ${selectedModel}`);
         return;
       }
 
-      // Check for refusal in common formats
       if (result.refusal) {
         setError(typeof result.refusal === 'string' ? result.refusal : 'Request was refused by the AI model.');
         setResponse(null);
         return;
       }
-      
+
       if (result.message?.refusal) {
         setError(typeof result.message.refusal === 'string' ? result.message.refusal : 'Request was refused by the AI model.');
         setResponse(null);
         return;
       }
-      
-      // Extract the text content using our helper function
-      const extractedText = extractTextContent(result);
-      setResponse(extractedText);
-      
+
+      const processedResponse = await extractTextContent(result);
+      setResponse(processedResponse);
     } catch (error) {
-      console.error('Error calling AI:', error);
-      
-      // More detailed error reporting
-      let errorMsg = 'Failed to get response from AI model. Please try again.';
-      
-      if (error instanceof Error) {
-        errorMsg += ` Error: ${error.message}`;
-      } else if (typeof error === 'string') {
-        errorMsg += ` Error: ${error}`;
-      } else if (typeof error === 'object' && error !== null) {
-        try {
-          errorMsg += ` Error details: ${JSON.stringify(error)}`;
-        } catch (e) {
-          errorMsg += ' Error details could not be stringified.';
-        }
-      }
-      
-      setError(errorMsg);
+      console.error('Error:', error);
+      setError(error instanceof Error ? error.message : 'An unknown error occurred');
+      setResponse(null);
     } finally {
       setIsLoading(false);
     }
@@ -186,6 +239,7 @@ export default function Home() {
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
                 Select AI Model
               </h2>
+              
               <ModelSelector
                 selectedModel={selectedModel}
                 onSelect={setSelectedModel}
