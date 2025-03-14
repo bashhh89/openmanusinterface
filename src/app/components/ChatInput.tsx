@@ -31,11 +31,9 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSubmit, isLoading }) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const trimmedPrompt = typeof prompt === 'string' ? prompt.trim() : '';
-    if (trimmedPrompt && !isLoading) {
-      onSubmit(trimmedPrompt);
-      // Don't clear the prompt to allow for iterative refinement
-      // setPrompt('');
+    if (prompt.trim() && !isLoading) {
+      onSubmit(prompt);
+      setPrompt('');
     }
   };
 
@@ -102,66 +100,42 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSubmit, isLoading }) => {
   return (
     <div className="w-full">
       <form onSubmit={handleSubmit} className="relative">
-        <textarea
-          ref={textareaRef}
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Ask me to create a website, app, or game..."
-          className="w-full p-4 pr-24 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none min-h-[100px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-          disabled={isLoading || isEnhancing}
-        />
-        
-        {/* Magic Enhance Button */}
-        <button
-          type="button"
-          onClick={enhancePrompt}
-          disabled={isLoading || isEnhancing || !(typeof prompt === 'string' && prompt.trim())}
-          className={`absolute right-[100px] bottom-3 px-3 py-2 rounded-md flex items-center ${
-            isLoading || isEnhancing || !(typeof prompt === 'string' && prompt.trim())
-              ? 'bg-gray-400 cursor-not-allowed text-white'
-              : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white transition-colors'
-          }`}
-          title="Enhance your prompt with AI"
-        >
-          {isEnhancing ? (
-            <div className="flex items-center">
-              <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-            </div>
-          ) : (
-            <>
-              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-              </svg>
-              Enhance
-            </>
-          )}
-        </button>
-        
-        <button
-          type="submit"
-          disabled={isLoading || isEnhancing || !(typeof prompt === 'string' && prompt.trim())}
-          className={`absolute right-3 bottom-3 px-4 py-2 rounded-md text-white ${
-            isLoading || isEnhancing || !(typeof prompt === 'string' && prompt.trim())
-              ? 'bg-gray-400 cursor-not-allowed'
-              : 'bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-500 hover:to-pink-500 transition-colors'
-          }`}
-        >
-          {isLoading ? (
-            <div className="flex items-center">
-              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              Processing
-            </div>
-          ) : (
-            'Send'
-          )}
-        </button>
+        <div className="relative rounded-xl shadow-lg overflow-hidden bg-gray-800/50 backdrop-blur-sm border border-gray-700/50 transition-all focus-within:border-purple-500/50 focus-within:shadow-purple-500/10">
+          <textarea
+            ref={textareaRef}
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Ask me to create a website, app, or game..."
+            className="w-full bg-transparent border-0 focus:ring-0 text-white placeholder-gray-400 p-4 pr-20 resize-none min-h-[56px] max-h-[200px] overflow-y-auto"
+            disabled={isLoading}
+          />
+          <button
+            type="submit"
+            disabled={isLoading || !prompt.trim()}
+            className={`absolute right-2 bottom-2 rounded-lg px-4 py-2 font-medium transition-all ${
+              isLoading || !prompt.trim()
+                ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white'
+            }`}
+          >
+            {isLoading ? (
+              <div className="flex items-center">
+                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span>Processing</span>
+              </div>
+            ) : (
+              'Send'
+            )}
+          </button>
+        </div>
+        <div className="mt-2 text-xs text-gray-400 flex justify-between">
+          <span>Press Shift+Enter for new line</span>
+          <span className="text-purple-400">Powered by Puter.js</span>
+        </div>
       </form>
       
       <div className="mt-3">

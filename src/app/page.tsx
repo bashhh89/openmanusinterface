@@ -1185,9 +1185,9 @@ export default function Home() {
       ) : (
         <div className="flex flex-col w-full h-screen bg-gradient-to-br from-gray-900 via-purple-900/10 to-black">
           {/* Header with model selector */}
-          <div className="bg-gray-900 shadow-md border-b border-gray-800 p-4">
+          <div className="bg-gray-900/80 backdrop-blur-sm shadow-lg border-b border-gray-800 p-4 sticky top-0 z-50">
             <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between">
-              <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-400 mb-4 md:mb-0">
+              <h1 className="text-xl font-bold text-gradient-primary mb-4 md:mb-0">
                 AI Code Generator
               </h1>
               
@@ -1203,8 +1203,11 @@ export default function Home() {
                 
                 <button
                   onClick={() => setShowGuidedWorkflow(true)}
-                  className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-md transition-colors"
+                  className="btn-primary flex items-center"
                 >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
                   <span className="hidden md:inline">Project</span> Templates
                 </button>
               </div>
@@ -1222,7 +1225,7 @@ export default function Home() {
                   setShareUrl(null);
                   setError(null);
                 }}
-                className="bg-gradient-to-r from-green-500 to-teal-600 text-white rounded-full p-4 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1"
+                className="bg-gradient-to-r from-green-500 to-teal-600 text-white rounded-full p-4 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 hover:scale-105"
                 title="New Chat"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1231,7 +1234,7 @@ export default function Home() {
               </button>
               <button
                 onClick={() => setShowGuidedWorkflow(true)}
-                className="bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-full p-4 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1"
+                className="bg-gradient-to-r from-purple-500 to-indigo-600 text-white rounded-full p-4 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 hover:scale-105"
                 title="Project Templates"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1240,7 +1243,7 @@ export default function Home() {
               </button>
               <button
                 onClick={() => setShowLandingPage(true)}
-                className="bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-full p-4 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1"
+                className="bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-full p-4 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 hover:scale-105"
                 title="Back to Home"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1330,7 +1333,7 @@ export default function Home() {
                           <div className="flex items-center space-x-3">
                             <svg className="animate-spin h-5 w-5 text-purple-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                             </svg>
                             <h3 className="text-lg font-semibold text-white">
                               Generating Content

@@ -1,9 +1,6 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 import Script from "next/script";
-
-const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "AI Platform",
@@ -21,12 +18,10 @@ export default function RootLayout({
         <Script 
           src="https://js.puter.com/v2/" 
           strategy="beforeInteractive"
-          onError={(e) => {
-            console.error('Error loading Puter.js:', e);
-          }}
         />
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
       </head>
-      <body className={`${inter.className} antialiased`}>{children}</body>
+      <body className="antialiased font-sans">{children}</body>
     </html>
   );
 }

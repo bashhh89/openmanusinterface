@@ -1,11 +1,13 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
+  --foreground-rgb: 255, 255, 255;
+  --background-start-rgb: 13, 17, 23;
+  --background-end-rgb: 0, 0, 0;
+  --primary-gradient-from: 139, 92, 246; /* purple-500 */
+  --primary-gradient-to: 79, 70, 229; /* indigo-600 */
+  --secondary-gradient-from: 236, 72, 153; /* pink-500 */
+  --secondary-gradient-to: 147, 51, 234; /* purple-600 */
 }
 
 @theme inline {
@@ -113,4 +115,64 @@ body {
 
 .accordion-content.open {
   max-height: 500px;
+}
+
+.bg-gradient-primary {
+  background: linear-gradient(to right, rgb(var(--primary-gradient-from)), rgb(var(--primary-gradient-to)));
+}
+
+.bg-gradient-secondary {
+  background: linear-gradient(to right, rgb(var(--secondary-gradient-from)), rgb(var(--secondary-gradient-to)));
+}
+
+.text-gradient-primary {
+  background: linear-gradient(to right, rgb(var(--primary-gradient-from)), rgb(var(--primary-gradient-to)));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.text-gradient-secondary {
+  background: linear-gradient(to right, rgb(var(--secondary-gradient-from)), rgb(var(--secondary-gradient-to)));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Enhanced button styles */
+.btn-primary {
+  @apply px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-md transition-colors shadow-md;
+}
+
+.btn-secondary {
+  @apply px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-md transition-colors border border-gray-700 shadow-md;
+}
+
+/* Enhanced input styles */
+.input-primary {
+  @apply bg-gray-800/50 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all;
+}
+
+/* Card styles */
+.card {
+  @apply bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-xl p-6 shadow-lg;
+}
+
+/* Animation utilities */
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.5s ease-in-out;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
