@@ -2,12 +2,12 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 
-interface ChatInputProps {
+interface EnhancedChatInputProps {
   onSubmit: (prompt: string) => void;
   isLoading: boolean;
 }
 
-const ChatInput: React.FC<ChatInputProps> = ({ onSubmit, isLoading }) => {
+const EnhancedChatInput: React.FC<EnhancedChatInputProps> = ({ onSubmit, isLoading }) => {
   const [prompt, setPrompt] = useState<string>('');
   const [isEnhancing, setIsEnhancing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -32,7 +32,7 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSubmit, isLoading }) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedPrompt = typeof prompt === 'string' ? prompt.trim() : '';
-    if (trimmedPrompt && !isLoading) {
+    if (trimmedPrompt && !isLoading && !isEnhancing) {
       onSubmit(trimmedPrompt);
       // Don't clear the prompt to allow for iterative refinement
       // setPrompt('');
@@ -183,4 +183,4 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSubmit, isLoading }) => {
   );
 };
 
-export default ChatInput;
+export default EnhancedChatInput; 

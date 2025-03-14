@@ -18,7 +18,13 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <Script src="https://js.puter.com/v2/" strategy="beforeInteractive" />
+        <Script 
+          src="https://js.puter.com/v2/" 
+          strategy="beforeInteractive"
+          onError={(e) => {
+            console.error('Error loading Puter.js:', e);
+          }}
+        />
       </head>
       <body className={`${inter.className} antialiased`}>{children}</body>
     </html>
