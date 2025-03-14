@@ -111,6 +111,7 @@ export default function Home() {
   const [currentHistoryIndex, setCurrentHistoryIndex] = useState(-1);
   const [versions, setVersions] = useState<Version[]>([]);
   const [currentVersion, setCurrentVersion] = useState(1);
+  const [activeAccordion, setActiveAccordion] = useState<number | null>(null);
 
   // Initialize previewWidth from localStorage on client-side only
   useEffect(() => {
@@ -372,6 +373,9 @@ export default function Home() {
     newHistory.push({ content, timestamp: Date.now() });
     setHistory(newHistory);
     setCurrentHistoryIndex(newHistory.length - 1);
+    
+    // Save to localStorage
+    localStorage.setItem('generationHistory', JSON.stringify(newHistory));
   };
 
   // Undo/Redo functions
@@ -411,7 +415,11 @@ export default function Home() {
         description,
         timestamp: Date.now()
       };
-      setVersions([...versions, newVersion]);
+      const updatedVersions = [...versions, newVersion];
+      setVersions(updatedVersions);
+      
+      // Save to localStorage
+      localStorage.setItem('generationVersions', JSON.stringify(updatedVersions));
     }
   };
 
@@ -641,13 +649,11 @@ export default function Home() {
       // Create a minimal standalone HTML page
       const minimalHtml = htmlContent.trim();
       
-      // Create the share URL
-      const shareUrl = `${window.location.origin}/shared?content=${encodeURIComponent(minimalHtml)}`;
+      // Create a blob from the HTML content
+      const blob = new Blob([minimalHtml], { type: 'text/html' });
       
-      // Validate the URL length (browsers typically have a limit around 2000 characters)
-      if (shareUrl.length > 2000) {
-        throw new Error('Generated content is too large to share via URL. Please try generating a simpler page.');
-      }
+      // Create a share URL using the blob
+      const shareUrl = URL.createObjectURL(blob);
       
       setShareLink(shareUrl);
       
@@ -746,13 +752,68 @@ export default function Home() {
     }
   };
 
+  // Load saved history and versions on component mount
+  useEffect(() => {
+    try {
+      // Load history
+      const savedHistory = localStorage.getItem('generationHistory');
+      if (savedHistory) {
+        const parsedHistory = JSON.parse(savedHistory);
+        setHistory(parsedHistory);
+        setCurrentHistoryIndex(parsedHistory.length - 1);
+      }
+
+      // Load versions
+      const savedVersions = localStorage.getItem('generationVersions');
+      if (savedVersions) {
+        const parsedVersions = JSON.parse(savedVersions);
+        setVersions(parsedVersions);
+      }
+
+      // Load last response if exists
+      const lastResponse = localStorage.getItem('lastResponse');
+      if (lastResponse) {
+        setResponse(lastResponse);
+        updatePreview(lastResponse);
+      }
+    } catch (error) {
+      console.error('Error loading saved data:', error);
+    }
+  }, []);
+
+  // Save response to localStorage whenever it changes
+  useEffect(() => {
+    if (response) {
+      localStorage.setItem('lastResponse', response);
+    }
+  }, [response]);
+
+  // Clean up localStorage when component unmounts
+  useEffect(() => {
+    return () => {
+      // Optional: Clear old data if it's too large
+      const historySize = localStorage.getItem('generationHistory')?.length || 0;
+      const versionsSize = localStorage.getItem('generationVersions')?.length || 0;
+      
+      // If total size exceeds 10MB, clear older entries
+      if (historySize + versionsSize > 10 * 1024 * 1024) {
+        const history = JSON.parse(localStorage.getItem('generationHistory') || '[]');
+        const versions = JSON.parse(localStorage.getItem('generationVersions') || '[]');
+        
+        // Keep only the last 50 entries
+        localStorage.setItem('generationHistory', JSON.stringify(history.slice(-50)));
+        localStorage.setItem('generationVersions', JSON.stringify(versions.slice(-50)));
+      }
+    };
+  }, []);
+
   return (
-    <main className={`min-h-screen ${isDarkMode ? 'dark' : ''}`}>
-      <div className="dark:bg-gray-900 min-h-screen">
+    <main className="min-h-screen">
+      <div className="dark:bg-gray-900 min-h-screen relative overflow-hidden">
         {/* Chat Interface Section */}
-        <section id="chat-interface" className="py-12 px-4 sm:px-6 lg:px-8">
+        <section className="py-12 px-4 sm:px-6 lg:px-8">
           <div className="max-w-7xl mx-auto">
-            {/* Add Share Button */}
+            {/* Share Button */}
             <div className="mb-4 flex justify-end">
               {response && (
                 <button
@@ -770,14 +831,21 @@ export default function Home() {
             {/* Share Link Display */}
             {shareLink && (
               <div className="mb-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-md">
-                <p className="text-sm text-gray-600 dark:text-gray-400">Share Link:</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <input
-                    type="text"
-                    value={shareLink}
-                    readOnly
-                    className="flex-1 p-2 text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded"
-                  />
+                <p className="text-sm text-gray-600 dark:text-gray-400">Share Options:</p>
+                <div className="flex items-center gap-2 mt-2">
+                  <button
+                    onClick={() => {
+                      const a = document.createElement('a');
+                      a.href = shareLink;
+                      a.download = 'generated-page.html';
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                    }}
+                    className="px-3 py-2 text-sm text-white bg-green-600 hover:bg-green-500 rounded"
+                  >
+                    Download HTML
+                  </button>
                   <button
                     onClick={() => {
                       navigator.clipboard.writeText(shareLink);
@@ -785,13 +853,13 @@ export default function Home() {
                     }}
                     className="px-3 py-2 text-sm text-white bg-indigo-600 hover:bg-indigo-500 rounded"
                   >
-                    Copy
+                    Copy Link
                   </button>
                 </div>
               </div>
             )}
 
-            {/* Add Progress Indicator */}
+            {/* Progress Indicator */}
             {isLoading && (
               <div className="mb-4 p-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
                 <div className="space-y-4">
@@ -926,18 +994,6 @@ export default function Home() {
             </div>
           </div>
         </section>
-        
-        {/* Footer */}
-        <footer className="bg-gray-50 dark:bg-gray-800/50 py-12 mt-12">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <p className="text-gray-600 dark:text-gray-400">
-              Try asking: "Browse example.com" or ask any question to the AI
-            </p>
-            <p className="mt-4 text-sm text-gray-500 dark:text-gray-500">
-              © 2024 AI Web Explorer • Powered by Puter.js
-            </p>
-          </div>
-        </footer>
       </div>
     </main>
   );
